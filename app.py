@@ -5,16 +5,23 @@ import os
 import re
 from pathlib import Path
 import tempfile
-import threading
 import time
+import logging
+import sys
+
 
 
 app = Flask(__name__)
 CORS(app)
 
 
-DOWNLOAD_DIR = Path("downloads")
-DOWNLOAD_DIR.mkdir(exist_ok=True)
+try:
+    DOWNLOAD_DIR = Path("downloads")
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    logging.info(f"Download directory created at: {DOWNLOAD_DIR.resolve()}")
+except Exception as e:
+    logging.error(f"Failed to create download directory: {str(e)}")
+
 
 def extract_video_id(url):
     """Extract YouTube video ID from URL"""
@@ -175,6 +182,7 @@ def download_video():
                 'preferedformat': 'mp4',
             }]
         
+        logging.info("Starting yt_dlp download...")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             base_filename = ydl.prepare_filename(info)
@@ -191,13 +199,15 @@ def download_video():
                 if os.path.exists(file_path):
                     downloaded_file = file_path
                     break
-            
+
+            logging.info("Download finished")
+            logging.info(f"Base filename: {base_filename}")
+            logging.info(f"All files found: {all_files}")
             if not downloaded_file and all_files:
                 downloaded_file = str(max(all_files, key=os.path.getctime))
             
             if not downloaded_file:
                 return jsonify({'error': 'Download completed but file not found'}), 500
-            
             return jsonify({
                 'success': True,
                 'filename': os.path.basename(downloaded_file),
@@ -247,6 +257,12 @@ def format_bytes(size):
             return f"{size:.2f} {unit}"
         size /= 1024
     return f"{size:.2f} TB"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 
 
 if __name__ == '__main__':
